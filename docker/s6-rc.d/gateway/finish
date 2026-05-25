@@ -1,0 +1,14 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# Gateway finish script — mirrors dashboard/finish pattern.
+# Exit 125 when gateway is disabled so s6-supervise leaves slot down.
+# Exit 0 when enabled so s6-supervise restarts on crash.
+
+case "${HERMES_GATEWAY:-1}" in
+    0|false|FALSE|False|no|NO|No)
+        exit 125
+        ;;
+    *)
+        exit 0
+        ;;
+esac

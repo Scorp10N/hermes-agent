@@ -1,0 +1,21 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# Gateway service — Telegram (and other platform) polling loop.
+# Controlled by HERMES_GATEWAY env var (default: enabled).
+# Set HERMES_GATEWAY=0 to disable at container start.
+
+case "${HERMES_GATEWAY:-1}" in
+    0|false|FALSE|False|no|NO|No)
+        exit 0
+        ;;
+esac
+
+cd /opt/data
+# shellcheck disable=SC1091
+. /opt/hermes/.venv/bin/activate
+
+# s6-setuidgid drops UID/GID but doesn't reset HOME — set it explicitly
+# so gateway lock files land in /opt/data rather than /root/.local/state/.
+export HOME=/opt/data
+
+exec s6-setuidgid hermes hermes gateway run --accept-hooks
