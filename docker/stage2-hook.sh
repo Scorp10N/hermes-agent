@@ -32,6 +32,14 @@ if [ -n "${HERMES_GID:-}" ] && [ "$HERMES_GID" != "$(id -g hermes)" ]; then
     groupmod -o -g "$HERMES_GID" hermes 2>/dev/null || true
 fi
 
+# --- Docker socket access (MCP tools via docker exec) ---
+if [ -S /var/run/docker.sock ]; then
+    DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)
+    echo "[stage2] Detected host docker GID: $DOCKER_GID"
+    groupadd -o -g "$DOCKER_GID" host-docker 2>/dev/null || true
+    usermod -aG host-docker hermes 2>/dev/null || true
+fi
+
 # --- Fix ownership of data volume ---
 actual_hermes_uid=$(id -u hermes)
 needs_chown=false
