@@ -798,6 +798,18 @@ platform_toolsets:
 #     env:
 #       GITHUB_PERSONAL_ACCESS_TOKEN: "ghp_..."
 #
+# Mission Control MCP server (MyLocalLLM stack — /app/mc-mcp-server.cjs is
+# bind-mounted from the mission-control repo by docker-compose.yml).
+# MC_URL and MC_API_KEY are injected at runtime via docker-compose environment.
+#
+# mcp_servers:
+#   mission-control:
+#     command: node
+#     args: ["/app/mc-mcp-server.cjs"]
+#     env:
+#       MC_URL: "http://mission-control:3000"
+#       MC_API_KEY: ""  # set via MC_API_KEY env var in docker-compose
+#
 # Sampling (server-initiated LLM requests) — enabled by default.
 # Per-server config under the 'sampling' key:
 #   analysis:
