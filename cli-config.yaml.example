@@ -800,7 +800,8 @@ platform_toolsets:
 #
 # Mission Control MCP server (MyLocalLLM stack — /app/mc-mcp-server.cjs is
 # bind-mounted from the mission-control repo by docker-compose.yml).
-# MC_URL and MC_API_KEY are injected at runtime via docker-compose environment.
+# MC_URL and MC_API_KEY are passed from docker-compose environment.
+# Hermes expands ${VAR} in env values at startup.
 #
 # mcp_servers:
 #   mission-control:
@@ -808,7 +809,7 @@ platform_toolsets:
 #     args: ["/app/mc-mcp-server.cjs"]
 #     env:
 #       MC_URL: "http://mission-control:3000"
-#       MC_API_KEY: ""  # set via MC_API_KEY env var in docker-compose
+#       MC_API_KEY: "${MC_API_KEY}"
 #
 # Sampling (server-initiated LLM requests) — enabled by default.
 # Per-server config under the 'sampling' key:
