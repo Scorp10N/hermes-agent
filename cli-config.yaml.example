@@ -810,6 +810,17 @@ platform_toolsets:
 #     env:
 #       MC_URL: "http://mission-control:3000"
 #       MC_API_KEY: "${MC_API_KEY}"
+
+# =============================================================================
+# Telegram platform settings (MyLocalLLM stack)
+# =============================================================================
+# allowed_chats: comma-separated list of group/supergroup chat IDs the bot will
+# respond in. Negative IDs for supergroups. DMs are never filtered.
+# AI-projects group: -1003972083656
+#
+telegram:
+  allowed_chats: "-1003972083656"
+  guest_mode: false
 #
 # Sampling (server-initiated LLM requests) — enabled by default.
 # Per-server config under the 'sampling' key:
