@@ -808,7 +808,7 @@ platform_toolsets:
 #     command: node
 #     args: ["/app/mc-mcp-server.cjs"]
 #     env:
-#       MC_URL: "http://mission-control:3000"
+#       MC_URL: "http://mission-control-standalone:3001"
 #       MC_API_KEY: "${MC_API_KEY}"
 
 # =============================================================================
