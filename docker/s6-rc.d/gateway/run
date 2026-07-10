@@ -4,6 +4,8 @@
 # Controlled by HERMES_GATEWAY env var (default: enabled).
 # Set HERMES_GATEWAY=0 to disable at container start.
 
+umask 022
+
 case "${HERMES_GATEWAY:-1}" in
     0|false|FALSE|False|no|NO|No)
         exit 0
@@ -14,8 +16,12 @@ cd /opt/data
 # shellcheck disable=SC1091
 . /opt/hermes/.venv/bin/activate
 
-# s6-setuidgid drops UID/GID but doesn't reset HOME — set it explicitly
-# so gateway lock files land in /opt/data rather than /root/.local/state/.
+# s6-setuidgid drops UID/GID but doesn't reset HOME or XDG vars — set them explicitly
+# so gateway lock/state files land in /opt/data rather than /root/.
 export HOME=/opt/data
+export XDG_CACHE_HOME=/opt/data/.cache
+export XDG_CONFIG_HOME=/opt/data/.config
+export XDG_DATA_HOME=/opt/data/.local/share
+export XDG_STATE_HOME=/opt/data/.local/state
 
 exec s6-setuidgid hermes hermes gateway run --accept-hooks

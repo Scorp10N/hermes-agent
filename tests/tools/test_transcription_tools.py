@@ -338,6 +338,23 @@ class TestTranscribeOpenAIExtended:
         call_kwargs = mock_openai_cls.call_args
         assert call_kwargs.kwargs["base_url"] == OPENAI_BASE_URL
 
+    def test_uses_configured_openai_stt_timeout(self, monkeypatch, sample_wav):
+        monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "sk-test")
+
+        mock_client = MagicMock()
+        mock_client.audio.transcriptions.create.return_value = "test"
+
+        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+             patch(
+                 "tools.transcription_tools._load_stt_config",
+                 return_value={"openai": {"timeout": 180}},
+             ), \
+             patch("openai.OpenAI", return_value=mock_client) as mock_openai_cls:
+            from tools.transcription_tools import _transcribe_openai
+            _transcribe_openai(sample_wav, "whisper-1")
+
+        assert mock_openai_cls.call_args.kwargs["timeout"] == 180
+
     def test_whitespace_stripped(self, monkeypatch, sample_wav):
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "sk-test")
 

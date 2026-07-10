@@ -256,6 +256,16 @@ KANBAN_GUIDANCE = (
     "cross-agent handoffs that outlive one API loop."
 )
 
+MISSION_CONTROL_GUIDANCE = (
+    "# Mission Control durable handoff protocol\n"
+    "When follow-up work must survive the current turn or be picked up later, "
+    "create a Mission Control task instead of calling `delegate_task`. Use the "
+    "local `mc` CLI to create the task, assign it to the right Hermes profile, "
+    "and let that profile pick it up from `mc tasks queue` when it is ready. "
+    "Use `delegate_task` only for short reasoning subtasks that finish inside "
+    "the current turn."
+)
+
 TOOL_USE_ENFORCEMENT_GUIDANCE = (
     "# Tool-use enforcement\n"
     "You MUST use your tools to take action — do not describe what you would do "

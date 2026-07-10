@@ -12,6 +12,13 @@
 # We drop to the hermes user via `s6-setuidgid` so the supervised
 # workload runs unprivileged (UID 10000 by default).
 set -e
+umask 022
+
+export HOME=/opt/data
+export XDG_CACHE_HOME=/opt/data/.cache
+export XDG_CONFIG_HOME=/opt/data/.config
+export XDG_DATA_HOME=/opt/data/.local/share
+export XDG_STATE_HOME=/opt/data/.local/state
 
 cd /opt/data
 # shellcheck disable=SC1091

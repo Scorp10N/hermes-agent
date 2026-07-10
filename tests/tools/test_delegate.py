@@ -514,6 +514,85 @@ class TestToolNamePreservation(unittest.TestCase):
 class TestDelegateObservability(unittest.TestCase):
     """Tests for enriched metadata returned by _run_single_child."""
 
+    def test_explicit_web_delegation_rejects_summary_without_web_tool_trace(self):
+        """Web-scoped work must not complete from unsupported prose alone."""
+        from tools.delegate_tool import _run_single_child
+
+        child = MagicMock()
+        child._delegate_required_toolsets = ["web"]
+        child.run_conversation.return_value = {
+            "final_response": "Here are today's headlines.",
+            "completed": True,
+            "interrupted": False,
+            "api_calls": 1,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": "Here are today's headlines.",
+                }
+            ],
+        }
+
+        result = _run_single_child(
+            task_index=0,
+            goal="Find and summarize today's Israel news",
+            child=child,
+            parent_agent=_make_mock_parent(),
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["summary"])
+        self.assertEqual(result["tool_trace"], [])
+        self.assertIn("required web tools", result["error"])
+
+    def test_explicit_web_delegation_rejects_summary_after_failed_web_tool(self):
+        """A failed web request is not evidence for a current-news summary."""
+        from tools.delegate_tool import _run_single_child
+
+        child = MagicMock()
+        child._delegate_required_toolsets = ["web"]
+        child.run_conversation.return_value = {
+            "final_response": "Here are today's headlines.",
+            "completed": True,
+            "interrupted": False,
+            "api_calls": 2,
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "tc_web",
+                            "function": {
+                                "name": "web_search",
+                                "arguments": '{"query": "Israel news today"}',
+                            },
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "tc_web",
+                    "content": '{"success": false, "error": "No web search provider configured"}',
+                },
+                {
+                    "role": "assistant",
+                    "content": "Here are today's headlines.",
+                },
+            ],
+        }
+
+        result = _run_single_child(
+            task_index=0,
+            goal="Find and summarize today's Israel news",
+            child=child,
+            parent_agent=_make_mock_parent(),
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertFalse(result["summary"])
+        self.assertEqual(result["tool_trace"][0]["status"], "error")
+        self.assertIn("successful web tool result", result["error"])
+
     def test_observability_fields_present(self):
         """Completed child should return tool_trace, tokens, model, exit_reason."""
         parent = _make_mock_parent(depth=0)

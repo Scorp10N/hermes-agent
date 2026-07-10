@@ -16,6 +16,7 @@
 # stdin/stdout/stderr access and handles arg parsing there.
 
 set -eu
+umask 022
 
 HERMES_HOME="${HERMES_HOME:-/opt/data}"
 INSTALL_DIR="/opt/hermes"
@@ -145,6 +146,21 @@ fi
 if [ -d "$INSTALL_DIR/skills" ]; then
     s6-setuidgid hermes "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/tools/skills_sync.py" \
         || echo "[stage2] Warning: skills_sync.py failed; continuing"
+fi
+
+# --- Permissions alignment for multi-container integration ---
+# Allow other containers (like mission-control running as non-root) to read the database, logs, state files and hooks.
+echo "[stage2] Aligning permissions of $HERMES_HOME for external read access"
+chmod -R a+rX "$HERMES_HOME" 2>/dev/null || true
+# Restrict private credential files
+if [ -f "$HERMES_HOME/.env" ]; then
+    chmod 600 "$HERMES_HOME/.env" 2>/dev/null || true
+fi
+if [ -f "$HERMES_HOME/auth.json" ]; then
+    chmod 600 "$HERMES_HOME/auth.json" 2>/dev/null || true
+fi
+if [ -f "$HERMES_HOME/config.yaml" ]; then
+    chmod 640 "$HERMES_HOME/config.yaml" 2>/dev/null || true
 fi
 
 echo "[stage2] Setup complete; starting user services"

@@ -704,6 +704,14 @@ sessions still have zero `kanban_*` schema footprint unless configured.
   `HERMES_KANBAN_BOARD` pinned in env); tenant is a soft namespace
   within a board for workspace-path + memory-key isolation.
 
+### Mission Control handoff
+
+If a follow-up task needs to survive the current turn or be picked up
+later, create it in Mission Control instead of using `delegate_task`.
+Use the local `mc` CLI to create the task, assign it to the right Hermes
+profile, and let that profile claim it from `mc tasks queue` when it is
+ready.
+
 User docs: https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban
 
 ---

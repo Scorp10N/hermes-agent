@@ -1,5 +1,6 @@
 """Gateway STT config tests — honor stt.enabled: false from config.yaml."""
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,75 @@ import yaml
 from gateway.config import GatewayConfig, Platform, load_gateway_config
 from gateway.platforms.base import MessageEvent, MessageType
 from gateway.session import SessionSource
+
+
+@pytest.mark.asyncio
+async def test_wait_for_http_ready_retries_until_probe_succeeds():
+    from gateway.run import _wait_for_http_ready
+
+    attempts = 0
+    waiting_notices = 0
+
+    async def probe(_url: str) -> bool:
+        nonlocal attempts
+        attempts += 1
+        return attempts == 3
+
+    async def on_wait() -> None:
+        nonlocal waiting_notices
+        waiting_notices += 1
+
+    assert await _wait_for_http_ready(
+        "http://llama-cpp:8080/health",
+        timeout=1,
+        interval=0,
+        probe=probe,
+        on_wait=on_wait,
+    )
+    assert attempts == 3
+    assert waiting_notices == 1
+
+
+@pytest.mark.asyncio
+async def test_post_stt_recovery_waits_without_restarting_transcriber():
+    from gateway.run import _wait_for_post_stt_model
+
+    probe = AsyncMock(return_value=True)
+
+    with patch(
+        "gateway.run.asyncio.create_subprocess_exec",
+        new=AsyncMock(side_effect=AssertionError("must not restart transcriber")),
+    ):
+        assert await _wait_for_post_stt_model(
+            "http://llama-cpp:8080/health",
+            timeout=5,
+            probe=probe,
+        )
+
+    probe.assert_awaited_once_with("http://llama-cpp:8080/health")
+
+
+@pytest.mark.asyncio
+async def test_restart_recovery_container_waits_for_success():
+    from gateway.run import _restart_recovery_container
+
+    process = AsyncMock()
+    process.communicate.return_value = (b"transcriber\n", b"")
+    process.returncode = 0
+
+    with patch(
+        "gateway.run.asyncio.create_subprocess_exec",
+        new=AsyncMock(return_value=process),
+    ) as create_process:
+        assert await _restart_recovery_container("transcriber", timeout=5)
+
+    create_process.assert_awaited_once_with(
+        "docker",
+        "restart",
+        "transcriber",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
 
 
 def test_gateway_config_stt_disabled_from_dict_nested():

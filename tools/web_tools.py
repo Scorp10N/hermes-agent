@@ -228,7 +228,16 @@ def _is_backend_available(backend: str) -> bool:
             return has_xai_credentials()
         except Exception:
             return False
-    return False
+    # Not one of the built-in names — fall back to a generic registry
+    # lookup so user-installed custom providers (~/.hermes/plugins/web/*)
+    # can be selected via web.search_backend/extract_backend too, instead
+    # of always being treated as unavailable.
+    try:
+        from agent.web_search_registry import get_provider as _wsp_get_provider
+        provider = _wsp_get_provider(backend)
+        return provider is not None and provider.is_available()
+    except Exception:
+        return False
 
 
 def _ddgs_package_importable() -> bool:

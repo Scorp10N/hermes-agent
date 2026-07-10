@@ -42,7 +42,7 @@ from collections import OrderedDict
 from contextvars import copy_context
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Optional, Any, List, Union
+from typing import Awaitable, Callable, Dict, Optional, Any, List, Union
 
 # account_usage imports the OpenAI SDK chain (~230 ms). Only needed by
 # /usage; we still import it at module top in the gateway because test
@@ -66,6 +66,81 @@ _AGENT_CACHE_IDLE_TTL_SECS = 3600.0  # evict agents idle for >1h
 _PLATFORM_CONNECT_TIMEOUT_SECS_DEFAULT = 30.0
 _ADAPTER_DISCONNECT_TIMEOUT_SECS_DEFAULT = 5.0
 _TELEGRAM_COMMAND_MENTION_RE = re.compile(r"(?<![\w:/])/([A-Za-z0-9][A-Za-z0-9_-]*)")
+
+
+async def _wait_for_http_ready(
+    url: str,
+    *,
+    timeout: float,
+    interval: float = 2.0,
+    probe: Optional[Callable[[str], Awaitable[bool]]] = None,
+    on_wait: Optional[Callable[[], Awaitable[None]]] = None,
+) -> bool:
+    """Poll an HTTP readiness endpoint until it succeeds or times out."""
+    if probe is None:
+        async def probe(target: str) -> bool:
+            import httpx
+
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(target)
+                return 200 <= response.status_code < 300
+            except httpx.HTTPError:
+                return False
+
+    deadline = time.monotonic() + max(timeout, 0)
+    wait_notified = False
+    while True:
+        if await probe(url):
+            return True
+        if not wait_notified and on_wait is not None:
+            wait_notified = True
+            await on_wait()
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(max(interval, 0))
+
+
+async def _restart_recovery_container(name: str, *, timeout: float = 30.0) -> bool:
+    """Restart a local recovery container and wait for Docker to finish."""
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "docker",
+            "restart",
+            name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except (OSError, asyncio.TimeoutError) as exc:
+        logger.error("Failed to restart STT recovery container %s: %s", name, exc)
+        return False
+    if process.returncode != 0:
+        logger.error(
+            "Failed to restart STT recovery container %s: %s",
+            name,
+            stderr.decode(errors="replace").strip(),
+        )
+        return False
+    logger.info("Restarted STT recovery container %s to release GPU memory", name)
+    return True
+
+
+async def _wait_for_post_stt_model(
+    url: str,
+    *,
+    timeout: float,
+    probe: Optional[Callable[[str], Awaitable[bool]]] = None,
+    on_wait: Optional[Callable[[], Awaitable[None]]] = None,
+) -> bool:
+    """Wait for the conversation model restored by the STT service."""
+    return await _wait_for_http_ready(
+        url,
+        timeout=timeout,
+        probe=probe,
+        on_wait=on_wait,
+    )
+
 
 _TELEGRAM_NOISY_STATUS_RE = re.compile(
     r"("  # transient/auxiliary status that should stay in logs, not Telegram chat
@@ -7842,6 +7917,61 @@ class GatewayRunner:
                     message_text,
                     audio_paths,
                 )
+                ready_url = os.getenv("STT_POST_READY_URL", "").strip()
+                if ready_url:
+                    try:
+                        ready_timeout = float(os.getenv("STT_POST_READY_TIMEOUT", "180"))
+                    except ValueError:
+                        ready_timeout = 180.0
+
+                    async def _notify_model_recovery() -> None:
+                        logger.warning(
+                            "STT completed while the conversation model is unavailable; "
+                            "waiting for readiness at %s",
+                            ready_url,
+                        )
+                        adapter = self.adapters.get(source.platform)
+                        if adapter is None:
+                            return
+                        try:
+                            await adapter.send(
+                                source.chat_id,
+                                "Voice transcription succeeded. The local model is "
+                                "restarting after the GPU handoff; I am waiting for it "
+                                "to become ready and will continue automatically.",
+                                metadata=self._thread_metadata_for_source(
+                                    source,
+                                    self._reply_anchor_for_event(event),
+                                ),
+                            )
+                        except Exception as exc:
+                            logger.debug("Failed to send STT recovery notice: %s", exc)
+
+                    if not await _wait_for_post_stt_model(
+                        ready_url,
+                        timeout=ready_timeout,
+                        on_wait=_notify_model_recovery,
+                    ):
+                        logger.error(
+                            "Conversation model did not recover within %.1fs after STT",
+                            ready_timeout,
+                        )
+                        adapter = self.adapters.get(source.platform)
+                        if adapter is not None:
+                            try:
+                                await adapter.send(
+                                    source.chat_id,
+                                    "Voice transcription succeeded, but the local model "
+                                    "did not recover before the stability timeout. The "
+                                    "request was stopped instead of sending a broken reply.",
+                                    metadata=self._thread_metadata_for_source(
+                                        source,
+                                        self._reply_anchor_for_event(event),
+                                    ),
+                                )
+                            except Exception as exc:
+                                logger.debug("Failed to send STT timeout notice: %s", exc)
+                        return None
                 _stt_fail_markers = (
                     "No STT provider",
                     "STT is disabled",

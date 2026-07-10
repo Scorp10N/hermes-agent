@@ -1,0 +1,7 @@
+name: web-trafilatura
+version: 1.0.0
+description: "Local URL extraction via httpx (fetch) + trafilatura (readability) — no API key, no external service. Extract-only, does not execute JavaScript."
+author: local
+kind: backend
+provides_web_providers:
+  - trafilatura

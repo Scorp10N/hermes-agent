@@ -1135,6 +1135,7 @@ def _build_child_agent(
         tool_progress_callback=child_progress_cb,
         iteration_budget=None,  # fresh budget per subagent
     )
+    child._delegate_required_toolsets = list(child_toolsets) if toolsets else []
     child._print_fn = getattr(parent_agent, "_print_fn", None)
     # Set delegation depth so children can't spawn grandchildren
     child._delegate_depth = child_depth
@@ -1668,6 +1669,31 @@ def _run_single_child(
                         # Fallback for messages without tool_call_id
                         tool_trace[-1].update(result_meta)
 
+        required_toolsets = getattr(child, "_delegate_required_toolsets", [])
+        web_required = (
+            isinstance(required_toolsets, (list, tuple, set))
+            and "web" in required_toolsets
+        )
+        web_tool_traces = [
+            trace
+            for trace in tool_trace
+            if model_tools.get_toolset_for_tool(trace.get("tool")) == "web"
+        ]
+        successful_web_tool = any(
+            trace.get("status") == "ok"
+            for trace in web_tool_traces
+        )
+        if status == "completed" and web_required and not successful_web_tool:
+            status = "failed"
+            summary = ""
+
+        missing_web_tool_error = (
+            "Subagent returned a summary without executing the required web tools."
+        )
+        failed_web_tool_error = (
+            "Subagent returned a summary without a successful web tool result."
+        )
+
         # Determine exit reason
         if interrupted:
             exit_reason = "interrupted"
@@ -1717,7 +1743,16 @@ def _run_single_child(
             ),
         }
         if status == "failed":
-            entry["error"] = result.get("error", "Subagent did not produce a response.")
+            if web_required and not successful_web_tool:
+                entry["error"] = (
+                    failed_web_tool_error
+                    if web_tool_traces
+                    else missing_web_tool_error
+                )
+            else:
+                entry["error"] = result.get(
+                    "error", "Subagent did not produce a response."
+                )
 
         # Cross-agent file-state reminder.  If this subagent wrote any
         # files the parent had already read, surface it so the parent

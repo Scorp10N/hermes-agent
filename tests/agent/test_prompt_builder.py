@@ -24,6 +24,7 @@ from agent.prompt_builder import (
     TOOL_USE_ENFORCEMENT_GUIDANCE,
     TOOL_USE_ENFORCEMENT_MODELS,
     OPENAI_MODEL_EXECUTION_GUIDANCE,
+    MISSION_CONTROL_GUIDANCE,
     MEMORY_GUIDANCE,
     SESSION_SEARCH_GUIDANCE,
     PLATFORM_HINTS,
@@ -48,6 +49,11 @@ class TestGuidanceConstants:
     def test_session_search_guidance_is_simple_cross_session_recall(self):
         assert "relevant cross-session context exists" in SESSION_SEARCH_GUIDANCE
         assert "recent turns of the current session" not in SESSION_SEARCH_GUIDANCE
+
+    def test_mission_control_guidance_mentions_queue_pickup(self):
+        assert "Mission Control task" in MISSION_CONTROL_GUIDANCE
+        assert "mc tasks queue" in MISSION_CONTROL_GUIDANCE
+        assert "delegate_task" in MISSION_CONTROL_GUIDANCE
 
 
 # =========================================================================
@@ -1192,6 +1198,5 @@ class TestOpenAIModelExecutionGuidance:
 # =========================================================================
 # Budget warning history stripping
 # =========================================================================
-
 
 
